@@ -1,0 +1,129 @@
+-------------install---------------
+
+
+!pip install numpy==2.2.0
+!pip install pandas==2.2.3
+!pip install scikit-learn==1.6.0
+!pip install matplotlib==3.9.3
+
+
+----------------import------------------
+
+
+
+import pandas as pd
+import numpy as np
+
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+
+from sklearn.metrics import log_loss
+import matplotlib.pyplot as plt
+
+%matplotlib inline 
+
+import warnings
+warnings.filterwarnings('ignore')
+
+
+
+--------------------------data-----------------------------
+
+
+url = "https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBMDeveloperSkillsNetwork-ML0101EN-SkillsNetwork/labs/Module%203/data/ChurnData.csv"
+churn_df = pd.read_csv(url)
+
+#shows data
+churn_df
+
+-------------create subsets---------------------------------------
+churn_df = churn_df[['tenure', 'age', 'address', 'income', 'ed', 'employ', 'equip', 'churn']]
+churn_df['churn'] = churn_df['churn'].astype('int')  ///Converts the 'churn' column to integer type (if it's not already).
+churn_df
+
+
+
+
+------------------convert df to array-------------------------
+#features selection
+
+
+X = np.asarray(churn_df[['tenure', 'age', 'address', 'income', 'ed', 'employ', 'equip']])
+X[0:5]  #print the first 5 rows
+
+or
+
+X = churn_df[['tenure', 'age', 'address', 'income', 'ed', 'employ', 'equip']].to_numpy()  ///2d
+y = churn_df['churn'].to_numpy()  ///1d
+
+# Print first 5 rows
+print("X (first 5 rows):")
+print(X[0:5])
+
+print("\ny (first 5 values):")
+print(y[0:5])
+
+
+
+
+----------------many features so standardize -------------------
+
+X_norm = StandardScaler().fit(X).transform(X)
+X_norm[0:5]
+
+
+--------------------train test----------------------------
+
+X_train, X_test, y_train, y_test = train_test_split( X_norm, y, test_size=0.2, random_state=4)
+
+
+
+
+
+
+
+
+-------------------------object of LR------------------
+
+LR = LogisticRegression().fit(X_train,y_train)
+
+
+
+
+-------------------predict-----------------
+
+yhat = LR.predict(X_test)
+yhat[:10]   ///shows the first 10 predictions
+
+
+
+---------------also see probabalities , each row is probabality of one person record---------------
+
+///[0.85, 0.15] means the model thinks there's an 85% chance the customer won't churn and 15% chance they will churn.
+
+
+yhat_prob = LR.predict_proba(X_test)
+yhat_prob[:10]
+
+
+------------------check role of each input for churn predction--------------
+
+# index=churn_df.columns[:-1] = his gives the feature names from your dataset, excluding the last column
+LR.coef_[0]: gives you the first (and only) row, i.e., the 1D array of weights
+ 
+
+coefficients = pd.Series(LR.coef_[0], index=churn_df.columns[:-1])
+coefficients.sort_values().plot(kind='barh')
+plt.title("Feature Coefficients in Logistic Regression Churn Model")
+plt.xlabel("Coefficient Value")
+plt.show()
+
+
+//higher values  = likely to churn
+
+
+
+-----------log loss---------------------
+
+log_loss(y_test, yhat_prob)  //Actual y and y prob formula
