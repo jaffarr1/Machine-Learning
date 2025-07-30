@@ -1,0 +1,279 @@
+-------------------- install ------------------
+
+!pip install numpy==2.2.0
+!pip install pandas==2.2.3
+!pip install scikit-learn==1.6.0
+!pip install matplotlib==3.9.3
+!pip install seaborn==0.13.2
+
+
+--------------------- import -------------------
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns  // more beautiful plots
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.multiclass import OneVsOneClassifier
+from sklearn.metrics import accuracy_score
+
+import warnings
+warnings.filterwarnings('ignore')
+
+
+
+=---------------------data-------------------------
+
+file_path = "https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/GkDzb7bWrtvGXdPOfk6CIg/Obesity-level-prediction-dataset.csv"
+data = pd.read_csv(file_path)
+
+
+
+
+
+
+------------------ check class imbalance -------------------------------- 
+
+ //class imbalance — some classes appear way more than others. A model trained on this would become biased toward predicting "Normal Weight" because it appears most often.
+
+//That’s why we visualize the target distribution — so we can:
+
+//Check if the data is balanced across all classes
+
+//Decide if we need to balance the dataset using techniques like SMOTE, undersampling, or class_weight
+
+
+sns.countplot(y='NObeyesdad', data=data)
+plt.title('Distribution of Obesity Levels')
+plt.show()
+
+
+// data is fairly balanced
+
+
+_________Exercise 1 _______________
+
+//Check for null values, and display a summary of the dataset (use .info() and .describe() methods).
+
+print(data.isnull().sum())
+
+
+
+
+----------------feature scaling / standardization-------------
+
+///Different features may have different ranges. For example:
+
+//Age: 18 to 60
+
+//Height: 1.4 to 2.0
+
+//Weight: 40 to 150
+
+//If we don’t scale, models like KNN, SVM, logistic regression, gradient descent–based models may perform poorly because they treat features with larger values as more important, even when they’re not.
+
+
+
+# Standardizing continuous numerical features
+continuous_columns = data.select_dtypes(include=['float64']).columns.tolist() //Is se hum ne woh column names jo continuous numbers hain
+scaler = StandardScaler()
+scaled_features = scaler.fit_transform(data[continuous_columns]) // scaled features all continues columnswith std 2d data
+
+# Converting to a DataFrame
+scaled_df = pd.DataFrame(scaled_features, columns=scaler.get_feature_names_out(continuous_columns)) // back to df as scaled features had arrays but no column names
+
+# Combining with the original dataset
+scaled_data = pd.concat([data.drop(columns=continuous_columns), scaled_df], axis=1) // now scaled data has all df with scaled also concated
+
+
+------------------One Hot Coding---------------
+//Convert categorical variables into numerical format using one-hot encoding.
+
+
+# Identifying categorical columns
+categorical_columns = scaled_data.select_dtypes(include=['object']).columns.tolist()
+categorical_columns.remove('NObeyesdad')  # Exclude target column
+
+# Applying one-hot encoding
+encoder = OneHotEncoder(sparse_output=False, drop='first') // sparse false is to keep in 2d array and not sparse matrix
+encoded_features = encoder.fit_transform(scaled_data[categorical_columns])
+
+# Converting to a DataFrame
+encoded_df = pd.DataFrame(encoded_features, columns=encoder.get_feature_names_out(categorical_columns))
+
+# Combining with the original dataset
+prepped_data = pd.concat([scaled_data.drop(columns=categorical_columns), encoded_df], axis=1)
+
+
+
+---------Encode the target variable----------
+// now all data encoded except target variable . it was ignored in one hot coding becauese target and features are to be treated separately . also target variable
+// are encoded by LabelEncoder which use discrete value ! ,2 ,3 for classes not like 1.2 , 2.3 in one hot encoding
+
+
+# Encoding the target variable
+prepped_data['NObeyesdad'] = prepped_data['NObeyesdad'].astype('category').cat.codes
+prepped_data.head()
+
+//astype(category ) Converts the 'NObeyesdad' column (which contains string labels) into a category type (a pandas data type for categorical data). and cat codes 1 ,2 3 assigned
+
+
+
+------------ separate features and target --------------------
+//feature extraction
+
+# Preparing final dataset
+X = prepped_data.drop('NObeyesdad', axis=1)
+y = prepped_data['NObeyesdad']
+
+
+-----------train transform---------------
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+// stratify =y means It tells train_test_split to split the data in such a way that the proportion of each class in y remains the same in both the training and test sets.
+
+
+----------------- train model with logistic one vs all ----------------------
+
+# Training logistic regression model using One-vs-All (default)
+
+// multi class clasifier type = one vs rest{all}  and max iter = 1000 , by default they are 100 , 1000 to train properly
+model_ova = LogisticRegression(multi_class='ovr', max_iter=1000)
+model_ova.fit(X_train, y_train)
+
+
+----------predict one vs all--------------
+
+y_pred_ova = model_ova.predict(X_test)
+
+-----------evaluate one vs all---------------
+
+# Evaluation metrics for OvA
+print("One-vs-All (OvA) Strategy")
+print(f"Accuracy: {np.round(100*accuracy_score(y_test, y_pred_ova),2)}%")
+
+
+-------------- One vs One Approach-------------
+
+
+# Training logistic regression model using One-vs-One
+model_ovo = OneVsOneClassifier(LogisticRegression(max_iter=1000))
+model_ovo.fit(X_train, y_train)
+
+
+-------predict one vs one --------------- 
+
+y_pred_ova = model_ova.predict(X_test)
+
+
+----------evaluate one vs all---------------
+
+# Evaluation metrics for OvA
+print("One-vs-All (OvA) Strategy")
+print(f"Accuracy: {np.round(100*accuracy_score(y_test, y_pred_ova),2)}%")
+
+
+
+
+
+
+
+------------------exercises -------------------
+
+Q2:2. Plot a bar chart of feature importance using the coefficients from the One vs All logistic regression model. Also try for the One vs One model.
+
+model_ovo = OneVsOneClassifier(LogisticRegression(max_iter=1000))
+
+# Calculate average absolute coefficients
+feature_importance_ova = np.mean(np.abs(model_ova.coef_), axis=0)
+
+# Create a DataFrame for plotting
+ova_df = pd.DataFrame({
+    'Feature': X.columns,
+    'Importance': feature_importance_ova
+}).sort_values(by='Importance', ascending=False)
+
+# Plot using Seaborn
+plt.figure(figsize=(10, 6))
+sns.barplot(x='Importance', y='Feature', data=ova_df, palette='viridis')
+plt.title("Feature Importance (One-vs-All Logistic Regression)")
+plt.xlabel("Average Coefficient Magnitude")
+plt.ylabel("Features")
+plt.tight_layout()
+plt.show()
+
+
+
+
+
+//Q3: Q3. Write a function obesity_risk_pipeline to automate the entire pipeline:
+
+Loading and preprocessing the data
+Training the model
+Evaluating the model
+The function should accept the file path and test set size as the input arguments.
+
+
+
+def obesity_risk_pipeline(data_path, test_size=0.2):
+    # Load data
+    data = pd.read_csv(data_path)
+
+    # Standardizing continuous numerical features
+    continuous_columns = data.select_dtypes(include=['float64']).columns.tolist()
+    scaler = StandardScaler()
+    scaled_features = scaler.fit_transform(data[continuous_columns])
+    
+    # Converting to a DataFrame
+    scaled_df = pd.DataFrame(scaled_features, columns=scaler.get_feature_names_out(continuous_columns))
+    
+    # Combining with the original dataset
+    scaled_data = pd.concat([data.drop(columns=continuous_columns), scaled_df], axis=1)
+
+    # Identifying categorical columns
+    categorical_columns = scaled_data.select_dtypes(include=['object']).columns.tolist()
+    categorical_columns.remove('NObeyesdad')  # Exclude target column
+    
+    # Applying one-hot encoding
+    encoder = OneHotEncoder(sparse_output=False, drop='first')
+    encoded_features = encoder.fit_transform(scaled_data[categorical_columns])
+    
+    # Converting to a DataFrame
+    encoded_df = pd.DataFrame(encoded_features, columns=encoder.get_feature_names_out(categorical_columns))
+    
+    # Combining with the original dataset
+    prepped_data = pd.concat([scaled_data.drop(columns=categorical_columns), encoded_df], axis=1)
+    
+    # Encoding the target variable
+    prepped_data['NObeyesdad'] = prepped_data['NObeyesdad'].astype('category').cat.codes
+
+    # Preparing final dataset
+    X = prepped_data.drop('NObeyesdad', axis=1)
+    y = prepped_data['NObeyesdad']
+   
+    # Splitting data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42, stratify=y)
+    
+    # Training and evaluation
+    model = LogisticRegression(multi_class='multinomial', max_iter=1000)
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    print("Accuracy:", accuracy_score(y_test, y_pred))
+
+# Call the pipeline function with file_path
+obesity_risk_pipeline(file_path, test_size=0.2)
+
+
+
+
+
+
+
+
+
+
+
+
