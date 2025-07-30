@@ -1,0 +1,162 @@
+//Works well on categoricla data  and use conditions process explanation to define final result in flowchart 
+//for clearer understanding of non tech person why bank loan was rejected 
+
+
+---------- import------------------
+
+!pip install numpy==2.2.0
+!pip install pandas==2.2.3
+!pip install scikit-learn==1.6.0
+!pip install matplotlib==3.9.3
+
+
+
+import numpy as np 
+import pandas as pd
+from matplotlib import pyplot as plt
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn import metrics
+
+%matplotlib inline
+
+import warnings
+warnings.filterwarnings('ignore')
+
+
+
+--------------------- data ---------------------------
+
+	path= 'https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBMDeveloperSkillsNetwork-ML0101EN-SkillsNetwork/labs/Module%203/data/drug200.csv'
+my_data = pd.read_csv(path)
+my_data
+
+---------------- pre processing --------------------------
+
+my_data.info()
+
+//This tells us that 4 out of the 6 features of this dataset are categorical, which will have to be converted into numerical ones to be used for modeling. For this, we can make use of LabelEncoder from the Scikit-Learn library.
+
+
+label_encoder = LabelEncoder()
+my_data['Sex'] = label_encoder.fit_transform(my_data['Sex']) 
+my_data['BP'] = label_encoder.fit_transform(my_data['BP'])
+my_data['Cholesterol'] = label_encoder.fit_transform(my_data['Cholesterol']) 
+my_data
+
+
+my_data.isnull().sum()
+
+
+//// convert target variable also
+
+/ used map instead of label encoder because label use alphabetical order sp drug x would get 25 . 
+
+custom_map = {'drugA':0,'drugB':1,'drugC':2,'drugX':3,'drugY':4}
+my_data['Drug_num'] = my_data['Drug'].map(custom_map) /// new column made
+my_data
+
+
+---------------------corr-------------------------------
+
+// as to find best split
+
+You can now use the corr() function to find the correlation of the input variables with the target variable. but drop column drugs as it it string
+
+
+my_data.drop('Drug' , axis = 1).corr()
+
+// for target column result 
+
+my_data.drop('Drug',axis=1).corr()['Drug_num']
+
+
+
+---------------------- check balance--------------------------
+
+category_counts = my_data['Drug'].value_counts()
+
+# Plot the count plot
+plt.bar(category_counts.index, category_counts.values, color='blue')
+plt.xlabel('Drug')
+plt.ylabel('Count')
+plt.title('Category Distribution')
+plt.xticks(rotation=45)  # Rotate labels for better readability if needed
+plt.show()
+
+This shows us the distribution of the different classes, clearly indicating that Drug X and Drug Y have many more records in comparison to the other 3.
+
+// we can use stratify to ensure equal classes in data split
+
+
+
+
+------------------------------- features extraction - ---------------------------------------------------
+
+y = my_data['Drug']
+X = my_data.drop(['Drug','Drug_num'], axis=1)
+
+
+----------------------------------- train test split----------------------------
+
+X_trainset, X_testset, y_trainset, y_testset = train_test_split(X, y, test_size=0.3, random_state=32 , stratify = y)
+
+// entropy method for spltting , depth = 4 means 4 level splitting
+drugTree = DecisionTreeClassifier(criterion="entropy", max_depth = 4)
+drugTree.fit(X_trainset,y_trainset)
+
+
+
+-------------- predict ---------------
+
+tree_predictions = drugTree.predict(X_testset)
+
+print("Decision Trees's Accuracy: ", metrics.accuracy_score(y_testset, tree_predictions))
+
+// accuracy here is 1.0
+
+/ additional check
+
+from sklearn.model_selection import cross_val_score
+scores = cross_val_score(drugTree, X, y, cv=5)
+print("Cross-validation scores:", scores)
+print("Average CV accuracy:", scores.mean())
+
+
+
+------------------- visualize tree---------------------
+
+plot_tree(drugTree)
+plt.show()
+
+
+
+
+------------- understand tree---------------
+
+Na_to_K <= 14.829
+Ye sab se pehla decision hai. Tree yahaan do hisso mein bat raha hai:
+
+Agar Na_to_K <= 14.829 → Left jao (True)
+
+Agar Na_to_K > 14.829 → Right jao (False)
+
+Value:
+ini
+Copy
+Edit
+value = [16, 11, 1, 38, 64]
+Yeh 5 numbers show karte hain kitne examples hain har drug class ke:
+
+DrugA = 16
+
+DrugB = 11
+
+DrugC = 1
+
+DrugX = 38
+
+DrugY = 64 (sab se zyada!)
+
+
