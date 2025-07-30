@@ -1,0 +1,277 @@
+----------install----------------------
+!pip install numpy==2.2.0
+!pip install pandas==2.2.3
+!pip install scikit-learn==1.6.0
+!pip install matplotlib==3.9.3
+
+
+--------------import------------------------------
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+%matplotlib inline
+
+
+--------------------dataset-----------------
+url= "https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBMDeveloperSkillsNetwork-ML0101EN-SkillsNetwork/labs/Module%202/data/FuelConsumptionCo2.csv"
+
+df = pd.read_csv(url)
+
+df.sample(5)
+
+df.describe()
+
+
+-------------------drop unwanted and textual data------------------------------------
+
+df = df.drop(['MODELYEAR', 'MAKE', 'MODEL', 'VEHICLECLASS', 'TRANSMISSION', 'FUELTYPE',],axis=1) 
+//axis = 1 mean drop downward full column
+
+or 
+
+cdf = df[[ 'ENGINESIZE' , ' ' , ' ' etc ]]
+
+---now that data is cleaned now check correlations between remaining variables
+
+
+df.corr()
+
+--yeu get a matrix .Look at the bottom row, which shows the correlation between each variable and the target, 'CO2EMISSIONS'. Each of these shows a fairly high level of correlation, each exceeding 85% in magnitude. Thus all of these features are good candidates.
+
+--Next, examine the correlations of the distinct pairs. 'ENGINESIZE' and 'CYLINDERS' are highly correlated, but 'ENGINESIZE' is more correlated with the target, so we can drop 'CYLINDERS'.
+
+--Similarly, each of the four fuel economy variables is highly correlated with each other. Since FUELCONSUMPTION_COMB_MPG is the most correlated with the target, you can drop the others: 'FUELCONSUMPTION_CITY,' 'FUELCONSUMPTION_HWY,' 'FUELCONSUMPTION_COMB.'
+
+--Notice that FUELCONSUMPTION_COMB and FUELCONSUMPTION_COMB_MPG are not perfectly correlated. They should be, though, because they measure the same property in different units. In practice, you would investigate why this is the case. You might find out that some or all of the data is not useable as is.
+
+
+-------------- so drop highly correlated attributes---------
+df = df.drop(['CYLINDERS', 'FUELCONSUMPTION_CITY', 'FUELCONSUMPTION_HWY','FUELCONSUMPTION_COMB',],axis=1)
+
+df.head(9)
+// head show top 9 records
+
+
+-----------------also for confirmation use scatter plot matrix --------------------------
+--A scatter matrix creates a grid of scatter plots. it plots each column of a DataFrame against every other column.
+--alpha=0.2?
+--This is the transparency of the dots (0.0 = fully transparent, 1.0 = solid).
+--Useful when dots overlap, making it easier to see clusters.
+
+
+
+--scatter to see correlations
+
+axes = pd.plotting.scatter_matrix(df, alpha=0.2)
+axes now is in 2d 
+# need to rotate axis labels so we can read them
+for ax in axes.flatten(): // converts to 1d
+    ax.xaxis.label.set_rotation(90) // x axis label formatting text
+    ax.yaxis.label.set_rotation(0) y axis label formatting text
+    ax.yaxis.label.set_ha('right') y axis label formatting text
+
+plt.tight_layout()
+plt.gcf().subplots_adjust(wspace=0, hspace=0) // tight and this line removes spaces between 1 graph and other , just formatting
+plt.show()
+
+----------conslusion of scatter matrix-------------
+--Relationship between FUELCONSUMPTION_COMB_MPG and CO2EMISSIONS is Non-Linear
+
+--Instead of a straight line, the scatter plot shows curved relationships.
+
+--This suggests that a linear regression model might not be the best choice unless we transform the data or use polynomial features.
+
+--Three Distinct Curves/Clusters
+
+--The points for FUELCONSUMPTION_COMB_MPG vs CO2EMISSIONS form three separate curves, not just one.
+
+--These curves indicate that there may be subgroups in the data — likely due to categorical features such as:
+
+--Fuel Type (e.g., Petrol, Diesel, Hybrid)
+
+--Vehicle Class (e.g., SUV, Compact)
+
+--This means: The effect of fuel consumption on emissions varies across categories, and we should investigate these further.
+    
+
+
+//-------------------extract features -----------------------
+
+--location by index and : selects all rows of column
+
+X = df.iloc[:,[0,1]].to_numpy()
+y = df.iloc[:,[2]].to_numpy()
+
+--engine , fuel consumption deatures in x as 2d
+
+
+--standardize variables so they come in mean  = 0 and S.D = 1 ,  how far is value from mean
+--------------- standardize so large value of 1 feature doesnt over weights it for prediction---------------
+
+from sklearn import preprocessing
+
+std_scaler = preprocessing.StandardScaler()
+X_std = std_scaler.fit_transform(X) // fit finds mean , sd then transform is used to transform data of features in term of mean 
+
+X_std is in 2d and mean values as X features were 2d 
+
+----------------now test tarin-------------
+
+--Standardizing X helps the model perform better.
+--Keeping y in original units keeps the prediction interpretable and useful.
+
+
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(X_std,y,test_size=0.2,random_state=42)
+
+--train now
+
+
+from sklearn import linear_model
+
+# create a model object
+regressor = linear_model.LinearRegression()
+
+# train the model in the training data
+regressor.fit(X_train, y_train)
+
+# Print the coefficients
+coef_ =  regressor.coef_
+intercept_ = regressor.intercept_
+
+print ('Coefficients: ',coef_)
+print ('Intercept: ',intercept_)
+
+---------------------convert back to roiginal---------------
+
+--Ab model ne jo coef_ (coefficients) aur intercept_ seekhe, woh keh raha hai:
+
+--“Agar engine size mein 1 standard deviation ka izafa ho, toh emission itna barhta hai.”
+
+--Lekin engineer ko samajhna hai:
+
+--“Agar engine size 1 liter barhta hai, toh emission kitna barhta hai?”
+ Coefficients aur intercept Ko "Original Scale" Mein Lautaana Padta Hai:
+
+-----------------Get the standard scaler's mean and standard deviation parameters------------------
+
+--When you call std_scaler.fit_transform(X), std_scaler stores the original means and variances internally.
+
+--These are stored in the object as:
+
+--std_scaler.mean_: The original means of the columns in X
+
+--std_scaler.var_: The original variances (square of standard deviation)
+-- You don’t need to calculate means manually from X, because std_scaler already stored them during the fit_transform().
+
+
+means_ = std_scaler.mean_
+std_devs_ = np.sqrt(std_scaler.var_)
+
+
+
+# The least squares parameters can be calculated relative to the original, unstandardized feature space as:
+coef_original = coef_ / std_devs_
+intercept_original = intercept_ - np.sum((means_ * coef_) / std_devs_)
+
+print ('Coefficients: ', coef_original)
+print ('Intercept: ', intercept_original)
+
+-- now that model is trained and real coef , intercept are back
+
+------------visualize-------------------------
+
+
+#from mpl_toolkits.mplot3d import Axes3D
+import numpy as np
+import matplotlib.pyplot as plt
+
+--X features engine , fuel per model tarined tha , now for visulization separate them in 1d
+
+# Ensure X1, X2, and y_test have compatible shapes for 3D plotting
+X1 = X_test[:, 0] if X_test.ndim > 1 else X_test
+X2 = X_test[:, 1] if X_test.ndim > 1 else np.zeros_like(X1)
+
+
+--Because if X_test is 1D, there is no second column (1st column index = 1) — it doesn’t exist.
+--So we can’t use it. That’s why we fill X2 with zeros — just to "fake" a second dimension.
+
+# Create a mesh grid for plotting the regression plane
+--- x1_surf has now 100 rows of values between max , min values from  standardized X_test values in 1d
+
+x1_surf, x2_surf = np.meshgrid(np.linspace(X1.min(), X1.max(), 100), 
+                               np.linspace(X2.min(), X2.max(), 100))
+
+y_surf = intercept_ +  coef_[0,0] * x1_surf  +  coef_[0,1] * x2_surf
+
+# Predict y values using trained regression model to compare with actual y_test for above/below plane colors
+
+y_pred = regressor.predict(X_test.reshape(-1, 1)) if X_test.ndim == 1 else regressor.predict(X_test) // just for error handeling use X_test (-1 , 1) howerer it is in 2d
+above_plane = y_test >= y_pred // true false arrays of same shape as y_test returns , which are 2d
+below_plane = y_test < y_pred
+above_plane = above_plane[:,0]
+below_plane = below_plane[:,0] // converst in 1d for scatter
+
+# Plotting
+fig = plt.figure(figsize=(20, 8)) // empty canvas of width 20 height 8
+ax = fig.add_subplot(111, projection='3d') // add subplots with row , column , no of figure 111
+
+# Plot the data points above and below the plane in different colors
+ax.scatter(X1[above_plane], X2[above_plane], y_test[above_plane],  label="Above Plane",s=70,alpha=.7,ec='k')
+ax.scatter(X1[below_plane], X2[below_plane], y_test[below_plane],  label="Below Plane",s=50,alpha=.3,ec='k')
+///s= marker size , alpha = transparency , ec='k'= black edge color for each point ('k' = black)
+//X1 k above or below , x2 k above below points scatter ho gaye . ab jo line of regression hai in x1surf y surf usko plot krdo
+
+# Plot the regression plane
+ax.plot_surface(x1_surf, x2_surf, y_surf, color='k', alpha=0.21,label='plane')
+
+# Set view and labels
+ax.view_init(elev=10)// elavation to view
+
+ax.legend(fontsize='x-large',loc='upper center')
+ax.set_xticks([])
+ax.set_yticks([])
+ax.set_zticks([])/ X, Y, Z axis par jo numbers (ticks) aate hain unhein hide kar deta hai for clean look.
+ax.set_box_aspect(None, zoom=0.75)
+ax.set_xlabel('ENGINESIZE', fontsize='xx-large')
+ax.set_ylabel('FUELCONSUMPTION', fontsize='xx-large')
+ax.set_zlabel('CO2 Emissions', fontsize='xx-large')
+ax.set_title('Multiple Linear Regression of CO2 Emissions', fontsize='xx-large')
+plt.tight_layout()
+plt.show()
+
+
+
+
+=----------------------------seperate separate plains-------------------
+
+
+//Instead of making a 3D plot, which is difficult to interpret, you can look at vertical slices of the 3D plot by plotting each variable separately as a best-fit line using the corresponding regression parameters.
+
+plt.scatter(X_train[:,0], y_train,  color='blue') // 1st column from X_train and y_train
+plt.plot(X_train[:,0], coef_[0,0] * X_train[:,0] + intercept_[0], '-r') // coef[00]*x1 + intercept_[0] , intercept to hai he aik but for safety
+plt.xlabel("Engine size")  
+plt.ylabel("Emission")
+plt.show()
+
+
+plt.scatter(X_train[:,1], y_train,  color='blue')
+plt.plot(X_train[:,1], coef_[0,1] * X_train[:,1] + intercept_[0], '-r')
+plt.xlabel("FUELCONSUMPTION_COMB_MPG")
+plt.ylabel("Emission")
+plt.show()
+
+
+--------------------evaluation-------------------------
+
+-- both variables combined 
+
+
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+# Use the predict method to make test predictions
+y1_pred = regressor.predict(X_test)
+
+# Evaluation
+print("Mean absolute error: %.2f" % mean_absolute_error(y_test , y1_pred))
