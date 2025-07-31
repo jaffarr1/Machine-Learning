@@ -1,0 +1,129 @@
+//In this exercise session you will use a real dataset to train a regression tree model. The dataset includes information about taxi tip and was collected and provided to the NYC Taxi and Limousine Commission (TLC) by technology providers authorized under the Taxicab & Livery Passenger Enhancement Programs (TPEP/LPEP). You will use the trained model to predict the amount of tip paid.
+
+
+!pip install numpy
+!pip install pandas
+!pip install matplotlib
+!pip install scikit-learn
+
+from __future__ import print_function
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+%matplotlib inline
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import normalize
+from sklearn.metrics import mean_squared_error
+
+import warnings
+warnings.filterwarnings('ignore')
+
+
+
+
+
+--------------------data ------------------------------------
+
+# read the input data
+url = 'https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/pu9kbeSaAtRZ7RxdJKX9_A/yellow-tripdata.csv'
+raw_data = pd.read_csv(url)
+raw_data
+
+--------------------- check if linear or non linear -------------------------
+
+
+import matplotlib.pyplot as plt
+
+# List of columns excluding the target
+target_col = 'tip_amount'
+features = [col for col in raw_data.columns if col != target_col]
+
+# Set figure size
+plt.figure(figsize=(18, 5 * ((len(features) + 2) // 3)))
+
+# Create scatter plots
+for i, col in enumerate(features):
+    plt.subplot((len(features) + 2) // 3, 3, i + 1)
+    plt.scatter(raw_data[col], raw_data[target_col], color='blue', alpha=0.6)
+    plt.xlabel(col)
+    plt.ylabel(target_col)
+    plt.title(f'{col} vs {target_col}')
+
+plt.tight_layout()
+plt.show()
+
+
+---------------------- corr---------------------
+
+correlation_values = raw_data.corr()['tip_amount'].drop('tip_amount')
+correlation_values.plot(kind='barh', figsize=(10, 6))
+
+// ib orizontal bars
+
+
+---------------------------- processing --------------------------------
+
+# extract the labels from the dataframe
+y = raw_data[['tip_amount']].values.astype('float32') //Reduces memory usage compared to default `float64`.
+
+# drop the target variable from the feature matrix
+proc_data = raw_data.drop(['tip_amount'], axis=1)
+
+# get the feature matrix used for training
+X = proc_data.values  // convert df to numpy array  . same as to_numpy() because we need numeric values further for normalization
+
+# normalize the feature matrix
+X = normalize(X, axis=1, norm='l1', copy=False)   
+
+
+// normalize X , axis - 1 means row wise , normalization l1 , copy = flase means original X is normalized not make copy to use more space
+// normalize because  To make feature scales comparable, avoid bias during split , lets say if on efeature is in 100  200 300 and other feature is in 1 2 3 
+// while calculating MSE or ALPHA  squaring values give feature 1 more weitage , so use l1 normalization to make row in sum of 1 scale
+
+
+ --------------------- test train------------------------------
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+
+--------------- build model - ---------------------------------------
+
+
+# import the Decision Tree Regression Model from scikit-learn
+from sklearn.tree import DecisionTreeRegressor
+
+# for reproducible output across multiple function calls, set random_state to a given integer value
+dt_reg = DecisionTreeRegressor(criterion = 'squared_error',
+                               max_depth=8, 
+                               random_state=35)
+
+dt_reg.fit(X_train, y_train)
+
+
+
+-------------------------- evaluate predict-------------------------------------
+
+# run inference using the sklearn model
+y_pred = dt_reg.predict(X_test)
+
+# evaluate mean squared error on the test dataset
+mse_score = mean_squared_error(y_test, y_pred)
+print('MSE score : {0:.3f}'.format(mse_score))
+
+r2_score = dt_reg.score(X_test,y_test)
+print('R^2 score : {0:.3f}'.format(r2_score))
+
+
+
+
+----------------------- exercise------------------
+
+Q Q2. Identify the top 3 features with the most effect on the tip_amount.
+
+
+
+correlation_values = raw_data.corr()['tip_amount'].drop('tip_amount')
+abs(correlation_values).sort_values(ascending=False)[:3]
+
+
