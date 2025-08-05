@@ -1,0 +1,339 @@
+Implement and evaluate the performance of k-means clustering on synthetic data
+Interpret various evaluation metrics and visualizations
+Compare clustering results against known classes unsing synthetic data
+
+
+Introduction¶
+In this lab you will:
+
+Generate synthetic data for running targeted experiments using scikit-learn
+Create k-means models and evaluate their comparative performance
+Investigate evaluation metrics and techniques for assessing clustering results
+Your goal in this lab is primarily for you to gain some intuition around the subjective problem of finding good clustering solutions.
+
+
+
+
+------------------------- imports-----------------------------
+!pip install numpy==2.2.0
+!pip install pandas==2.2.3
+!pip install scikit-learn==1.6.0
+!pip install matplotlib==3.9.3
+!pip install scipy==1.14.1 
+
+// scipy is advance of numpy to give function used in k means distances etc
+//NumPy provides the fundamental array object and basic operations, while SciPy provides the advanced algorithms that operate on those arrays.
+
+
+
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.datasets import make_blobs
+from sklearn.datasets import make_classification
+from sklearn.metrics import silhouette_score, silhouette_samples, davies_bouldin_score
+from scipy.spatial import Voronoi, voronoi_plot_2d
+from matplotlib.patches import Patch
+from matplotlib import cm
+
+
+
+
+
+-------------------------- make function for evaluation --------------------------
+
+def evaluate_clustering(X, labels, n_clusters, ax=None, title_suffix=''):
+    """
+    Evaluate a clustering model using silhouette scores and the Davies-Bouldin index.
+    
+    Parameters:
+    X (ndarray): Feature matrix.
+    labels (array-like): Cluster labels assigned to each sample.
+    n_clusters (int): The number of clusters in the model.
+    ax: The subplot axes to plot on.
+    title_suffix (str): Optional suffix for plot titlec
+    
+    Returns:
+    None: Displays silhoutte scores and a silhouette plot.
+    """
+    if ax is None:
+        ax = plt.gca()  # Get the current axis if none is provided
+    
+    # Calculate silhouette scores
+    silhouette_avg = silhouette_score(X, labels)
+    sample_silhouette_values = silhouette_samples(X, labels)
+
+    # Plot silhouette analysis on the provided axis
+    unique_labels = np.unique(labels)
+    colormap = cm.tab10
+    color_dict = {label: colormap(float(label) / n_clusters) for label in unique_labels}
+    y_lower = 10
+    for i in unique_labels:
+        ith_cluster_silhouette_values = sample_silhouette_values[labels == i]
+        ith_cluster_silhouette_values.sort()
+        size_cluster_i = ith_cluster_silhouette_values.shape[0]
+        y_upper = y_lower + size_cluster_i
+        color = color_dict[i]
+        ax.fill_betweenx(np.arange(y_lower, y_upper),
+                         0, ith_cluster_silhouette_values,
+                         facecolor=color, edgecolor=color, alpha=0.7)
+        ax.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
+        y_lower = y_upper + 10
+    
+    ax.set_title(f'Silhouette Score for {title_suffix} \n' + 
+                 f'Average Silhouette: {silhouette_avg:.2f}')
+    ax.set_xlabel('Silhouette Coefficient')
+    ax.set_ylabel('Cluster')
+    ax.axvline(x=silhouette_avg, color="red", linestyle="--")
+    ax.set_xlim([-0.25, 1])  # Set the x-axis range to [0, 1]
+
+    ax.set_yticks([])
+
+
+
+
+--------------------- explanation of this function-----------------------
+
+X: This is your dataset—all the data points you're trying to cluster.
+
+labels: These are the cluster assignments that your model (e.g., k-means) has given to each data point.
+
+n_clusters: The number of clusters you told your model to find.
+
+ax=None: This is for plotting. It tells the function which specific subplot to draw on if you're creating multiple plots at once. If you don't provide one, it will just use the current plot.
+
+title_suffix='': An optional string you can add to the plot title to make it more descriptive (e.g., "for k=3").
+
+
+
+silhouette_score(X, labels): This is the first important part. It calculates the average silhouette score for your entire clustering. This single number gives you a high-level overview of how good the clustering is. A score closer to 1 is better.
+
+silhouette_samples(X, labels): This is where it gets interesting. Instead of one average score, this function calculates the individual silhouette score for every single data point. These individual scores are what the plot is made of.
+
+
+
+
+
+
+for i in unique_labels:: This loop runs once for each cluster. For example, if you have 3 clusters, the loop runs for i=0, i=1, and i=2.
+
+ith_cluster_silhouette_values = sample_silhouette_values[labels == i]: This line is key. It grabs all the individual silhouette scores that belong to the current cluster i.
+
+ith_cluster_silhouette_values.sort(): This sorts the scores from lowest to highest, which is what gives the silhouette plot its fan-like or stacked-bar shape.
+
+
+
+
+
+
+ax.axvline(x=silhouette_avg, color="red", linestyle="--"): This is very important. It draws the vertical red dashed line at the average silhouette score. This line acts as a benchmark. You want most of the individual silhouette bars to extend past this line, which would mean they have above-average scores.
+
+
+
+
+
+
+---------------------------- create senthetic data--------------------------------------
+
+
+
+X, y = make_blobs(n_samples=500, n_features=2, centers=4, cluster_std=[1.0, 3, 5, 2], random_state=42)
+
+# Apply KMeans clustering
+n_clusters = 4
+kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+y_kmeans = kmeans.fit_predict(X)
+
+colormap = cm.tab10
+
+# Plot the blobs
+plt.figure(figsize=(18, 6))
+plt.subplot(1, 3, 1)
+plt.scatter(X[:, 0], X[:, 1], s=50, alpha=0.6, edgecolor='k')
+centers = kmeans.cluster_centers_
+plt.scatter(centers[:, 0], centers[:, 1], c='red', s=200, marker='X', alpha=0.9, label='Centroids')
+plt.title(f'Synthetic Blobs with {n_clusters} Clusters')
+plt.xlabel('Feature 1')
+plt.ylabel('Feature 2')
+plt.legend()
+
+# Plot the clustering result
+# Create colors based on the predicted labels
+colors = colormap(y_kmeans.astype(float) / n_clusters)
+
+plt.subplot(1, 3, 2)
+plt.scatter(X[:, 0], X[:, 1], c=colors, s=50, alpha=0.6, edgecolor='k')
+
+# Label the clusters
+centers = kmeans.cluster_centers_
+# Draw white circles at cluster centers
+plt.scatter(
+    centers[:, 0],
+    centers[:, 1],
+    marker="o",
+    c="white",
+    alpha=1,
+    s=200,
+    edgecolor="k",
+    label='Centroids'
+)
+# Label the custer number
+for i, c in enumerate(centers):
+    plt.scatter(c[0], c[1], marker="$%d$" % i, alpha=1, s=50, edgecolor="k")
+
+plt.title(f'KMeans Clustering with {n_clusters} Clusters')
+plt.xlabel('Feature 1')
+plt.ylabel('Feature 2')
+plt.legend()
+
+# Evaluate the clustering
+plt.subplot(1, 3, 3)
+evaluate_clustering(X, y_kmeans, n_clusters, title_suffix=' k-Means Clustering')
+plt.show()
+
+
+----------------------- explanation of this-------------
+
+
+X, y = make_blobs(...): This line creates our synthetic dataset.
+
+n_samples=500: Generates 500 data points.
+
+n_features=2: Each data point has two features, making it easy to plot on a 2D graph.
+
+centers=4: Creates a dataset that naturally forms four distinct groups. The y variable stores the ground truth labels for these four groups, which we won't use for training but are useful for understanding the underlying structure.
+
+cluster_std=[1.0, 3, 5, 2]: This is a crucial detail for our lab. It sets the standard deviation (a measure of spread) for each of the four clusters. This makes our problem more realistic and challenging, as some clusters will be tight and others very spread out.
+
+random_state=42: Ensures we get the same data every time we run the code, making our experiment reproducible.
+
+n_clusters = 4: We're explicitly telling the K-Means algorithm to look for four clusters. We know this is the correct number based on how we generated the data.
+
+kmeans = KMeans(...): This creates an instance of the K-Means model.
+
+y_kmeans = kmeans.fit_predict(X): This is where the magic happens. The model is trained on our data X and returns the cluster assignments for each data point, which are stored in the y_kmeans variable.
+
+This section is the "setup" of our experiment. We've created a dataset with a known structure and then applied our unsupervised learning model to it.
+
+
+//////////////// now  visualize of this code explanation
+
+
+plt.figure(figsize=(18, 6)): Creates a large figure to hold our three plots side-by-side.
+
+plt.subplot(1, 3, 1): This command sets up the first subplot.
+
+plt.scatter(X[:, 0], X[:, 1], ...): Plots all 500 data points. X[:, 0] refers to the first feature and X[:, 1] to the second. This gives us a look at the raw data.
+
+plt.scatter(centers[:, 0], centers[:, 1], ...): This plots the centroids that the K-Means algorithm found. By plotting them on the original data, we can see where the model decided the center of each cluster should be.
+
+plt.subplot(1, 3, 2): This sets up the second subplot.
+
+colors = colormap(y_kmeans.astype(float) / n_clusters): This line assigns a unique color to each of the four clusters found by K-Means, preparing them for plotting.
+
+plt.scatter(X[:, 0], X[:, 1], c=colors, ...): This plots the data again, but this time each point is colored by its predicted cluster. This allows us to visually inspect how well the model has separated the groups.
+
+plt.scatter(...): The two plt.scatter calls here draw white circles and the cluster numbers on top of the centroids. This helps to clearly label each of the four clusters on the plot.
+
+
+////////////
+
+Let's break down this code block in detail. This example is a complete workflow for clustering, from creating data to evaluating the results. It's designed to give you hands-on experience with the concepts we've discussed.
+
+Part 1: Generating Data and Running K-Means
+This first part of the code sets up the experiment. We need a dataset to work with, and to properly test our clustering model, we'll create one with a known structure.
+
+X, y = make_blobs(...): This line creates our synthetic dataset.
+
+n_samples=500: Generates 500 data points.
+
+n_features=2: Each data point has two features, making it easy to plot on a 2D graph.
+
+centers=4: Creates a dataset that naturally forms four distinct groups. The y variable stores the ground truth labels for these four groups, which we won't use for training but are useful for understanding the underlying structure.
+
+cluster_std=[1.0, 3, 5, 2]: This is a crucial detail for our lab. It sets the standard deviation (a measure of spread) for each of the four clusters. This makes our problem more realistic and challenging, as some clusters will be tight and others very spread out.
+
+random_state=42: Ensures we get the same data every time we run the code, making our experiment reproducible.
+
+n_clusters = 4: We're explicitly telling the K-Means algorithm to look for four clusters. We know this is the correct number based on how we generated the data.
+
+kmeans = KMeans(...): This creates an instance of the K-Means model.
+
+y_kmeans = kmeans.fit_predict(X): This is where the magic happens. The model is trained on our data X and returns the cluster assignments for each data point, which are stored in the y_kmeans variable.
+
+This section is the "setup" of our experiment. We've created a dataset with a known structure and then applied our unsupervised learning model to it.
+
+Part 2: Visualizing the Results
+This section creates a figure with three subplots to give us a visual understanding of our data and the clustering result. Visualizing the data is a key part of evaluating unsupervised models.
+
+plt.figure(figsize=(18, 6)): Creates a large figure to hold our three plots side-by-side.
+
+plt.subplot(1, 3, 1): This command sets up the first subplot.
+
+plt.scatter(X[:, 0], X[:, 1], ...): Plots all 500 data points. X[:, 0] refers to the first feature and X[:, 1] to the second. This gives us a look at the raw data.
+
+plt.scatter(centers[:, 0], centers[:, 1], ...): This plots the centroids that the K-Means algorithm found. By plotting them on the original data, we can see where the model decided the center of each cluster should be.
+
+plt.subplot(1, 3, 2): This sets up the second subplot.
+
+colors = colormap(y_kmeans.astype(float) / n_clusters): This line assigns a unique color to each of the four clusters found by K-Means, preparing them for plotting.
+
+plt.scatter(X[:, 0], X[:, 1], c=colors, ...): This plots the data again, but this time each point is colored by its predicted cluster. This allows us to visually inspect how well the model has separated the groups.
+
+plt.scatter(...): The two plt.scatter calls here draw white circles and the cluster numbers on top of the centroids. This helps to clearly label each of the four clusters on the plot.
+
+This visualization part is essential because it allows us to directly see what the model did. Before even looking at metrics, we can see if the clusters make sense.
+
+Part 3: Evaluating the Clustering
+This final part is where we use the evaluate_clustering function to get a quantitative and visual assessment of the model's performance.
+
+plt.subplot(1, 3, 3): Sets up the third subplot for our evaluation plot.
+
+evaluate_clustering(X, y_kmeans, n_clusters, title_suffix=' k-Means Clustering'): This is the function we discussed in detail. It will:
+
+Calculate the average silhouette score for the entire clustering.
+
+Generate a silhouette plot, showing the individual silhouette scores for each data point, grouped by cluster. This is crucial for seeing if any clusters are poorly defined or if there are misclassified points.
+
+Draw a vertical red dashed line on the plot to indicate the average score, giving us a benchmark to judge each cluster by.
+
+plt.show(): Displays the entire figure with all three subplots.
+
+
+
+
+
+---------------------- check stability by inertia-----------------------
+
+# Number of runs for k-means with different random states
+n_runs = 8
+inertia_values = []
+
+# Calculate number of rows and columns needed for subplots
+n_cols = 2 # Number of columns
+n_rows = -(-n_runs // n_cols) # Ceil division to determine rows
+plt.figure(figsize=(16, 16)) # Adjust the figure size for better visualization
+
+# Run K-Means multiple times with different random states
+for i in range(n_runs):
+    kmeans = KMeans(n_clusters=4, random_state=None)  # Use the default `n_init`
+    kmeans.fit(X)
+    inertia_values.append(kmeans.inertia_)
+
+    # Plot the clustering result
+    plt.subplot(n_rows, n_cols, i + 1)
+    plt.scatter(X[:, 0], X[:, 1], c=kmeans.labels_, cmap='tab10', alpha=0.6, edgecolor='k')
+    plt.scatter(kmeans.cluster_centers_[:, 0], kmeans.cluster_centers_[:, 1], c='red', s=200, marker='x', label='Centroids')
+    plt.title(f'K-Means Run {i + 1}')
+    plt.xlabel('Feature 1')
+    plt.ylabel('Feature 2')
+    plt.legend(loc='upper right', fontsize='small')
+
+plt.tight_layout()
+plt.show()
+
+# Print inertia values
+for i, inertia in enumerate(inertia_values, start=1):
+    print(f'Run {i}: Inertia={inertia:.2f}')
