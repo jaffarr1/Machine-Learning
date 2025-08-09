@@ -1,0 +1,421 @@
+!pip install numpy
+!pip install pandas
+!pip install scikit-learn
+!pip install matplotlib
+
+
+
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
+from sklearn.metrics import explained_variance_score, mean_absolute_error, mean_squared_error, r2_score
+
+
+
+
+-------------- function to show metrices----------------------
+
+def regression_results(y_true, y_pred, regr_type):
+
+    # Regression metrics
+    ev = explained_variance_score(y_true, y_pred)
+    mae = mean_absolute_error(y_true, y_pred) 
+    mse = mean_squared_error(y_true, y_pred) 
+    r2 = r2_score(y_true, y_pred)
+    
+    print('Evaluation metrics for ' + regr_type + ' Linear Regression')
+    print('explained_variance: ',  round(ev,4)) 
+    print('r2: ', round(r2,4))
+    print('MAE: ', round(mae,4))
+    print('MSE: ', round(mse,4))
+    print('RMSE: ', round(np.sqrt(mse),4))
+    print()
+
+
+
+
+----------------- data------------------------------
+
+
+We'll create a simple data set with a linear relationship between the target and a single feature. We'll add some noise to the target to simulate real data. We'll also create a data set from this one that has outliers added. Then you'll compare the three linear regression model performances on the two datasets, with and without sigiifcant outliers added.
+
+
+# Generate synthetic data
+noise=1
+np.random.seed(42)
+X = 2 * np.random.rand(1000, 1)
+y = 4 + 3 * X + noise*np.random.randn(1000, 1)  # Linear relationship with some noise
+y_ideal =  4 + 3 * X
+# Specify the portion of the dataset to add outliers (e.g., the last 20%)
+y_outlier = pd.Series(y.reshape(-1).copy())
+
+# Identify indices where the feature variable X is greater than a certain threshold
+threshold = 1.5  # Example threshold to add outliers for larger feature values
+outlier_indices = np.where(X.flatten() > threshold)[0]
+
+# Add outliers at random locations within the specified portion
+num_outliers = 5  # Number of outliers to add
+selected_indices = np.random.choice(outlier_indices, num_outliers, replace=False)
+
+# Modify the target values at these indices to create outliers (add significant noise)
+y_outlier[selected_indices] += np.random.uniform(50, 100, num_outliers)
+
+
+
+
+///X = 2 * np.random.rand(1000, 1): This generates our feature data, X.
+
+np.random.rand(1000, 1) creates an array of 1000 random numbers, each between 0 and 1.
+
+Multiplying by 2 scales these numbers so X contains 1000 values ranging from 0 to 2. We're creating a dataset with 1000 samples and 1 feature.
+
+///y = 4 + 3 * X + noise * np.random.randn(1000, 1): This line defines our target variable, y.
+
+4 + 3 * X: This is the ideal linear relationship. If there were no noise, y would perfectly equal 4 + 3 * X. This is the "signal" we want our models to learn.
+
+noise * np.random.randn(1000, 1): This adds random noise to our y values.
+
+np.random.randn(1000, 1) generates 1000 random numbers from a standard normal distribution (a bell-shaped curve centered at 0).
+
+Multiplying by our noise variable (which is 1) scales this randomness. This simulates real-world imperfections in data, where observations don't perfectly follow a mathematical line.
+
+y_ideal = 4 + 3 * X: This line stores the y values without any noise.
+
+
+
+
+///y_outlier = pd.Series(y.reshape(-1).copy()): This creates a copy of our y data and converts it into a Pandas Series.
+
+.reshape(-1) flattens the y array into a 1-dimensional array.
+
+.copy()
+
+
+
+///threshold = 1.5: We define a threshold for our feature X. This means we'll specifically look for data points where the X value is greater than 1.5.
+
+outlier_indices = np.where(X.flatten() > threshold)[0]: This finds the indices (positions) in our dataset where the X value meets our threshold condition. We flatten X to make it a 1D array for np.where.
+
+
+
+/////num_outliers = 5: We decide to add 5 outliers to our dataset.
+
+
+
+////selected_indices = np.random.choice(outlier_indices, num_outliers, replace=False): From the outlier_indices we found, we randomly pick num_outliers (5) of them. replace=False ensures we don't pick the same index twice.
+
+
+
+////y_outlier[selected_indices] += np.random.uniform(50, 100, num_outliers): This is the critical line where outliers are introduced.
+
+For each of the selected_indices, we take its y_outlier value and add a large random number to it.
+
+np.random.uniform(50, 100, num_outliers) generates 5 random numbers between 50 and 100.
+
+
+
+
+
+
+----------------------------plot the actual and noisy data-------------------------
+
+
+plt.figure(figsize=(12, 6))
+
+# Scatter plot of the original data with outliers
+plt.scatter(X, y_outlier, alpha=0.4,ec='k', label='Original Data with Outliers')
+plt.plot(X, y_ideal,  linewidth=3, color='g',label='Ideal, noise free data')
+
+plt.xlabel('Feature (X)')
+plt.ylabel('Target (y)')
+plt.title('')
+plt.legend()
+plt.show()
+
+
+// scatter points with outliers and then plot line with ideal y to show those outliers
+
+
+
+
+
+------------------predict and model ----------------------------------------
+
+
+# Fit a simple linear regression model
+lin_reg = LinearRegression()
+lin_reg.fit(X, y_outlier)
+y_outlier_pred_lin = lin_reg.predict(X)
+
+# Fit a ridge regression model (regularization to control large coefficients)
+ridge_reg = Ridge(alpha=1)
+ridge_reg.fit(X, y_outlier)
+y_outlier_pred_ridge = ridge_reg.predict(X)
+
+# Fit a lasso regression model (regularization to control large coefficients)
+lasso_reg = Lasso(alpha=.2)
+lasso_reg.fit(X, y_outlier)
+y_outlier_pred_lasso = lasso_reg.predict(X)
+
+
+
+
+///////Ridge (L2 Penalty): The penalty is based on the square of the coefficients (∑θ 2). Squaring a coefficient makes it grow very quickly, so a moderate value of alpha like 1.0 is often sufficient to have a noticeable shrinking effect on the coefficients. A value of 1.0 provides a good starting point for a moderate amount of regularization.
+
+Lasso (L1 Penalty): The penalty is based on the absolute value of the coefficients (∑∣θ∣). The absolute value function creates a constant, strong pull towards zero. This means even a small alpha value for Lasso can have a significant effect, often driving coefficients to zero. A value like 0.2 provides a moderate amount of regularization without being so strong that it eliminates too many features or underfits the model.
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------- 2nd part--------------------------------------------------------------------------
+
+
+
+Create a high dimensional synthetic dataset with a small number of informative features using make_regression
+The output of make_regression is generated by applying a random linear regression model based on n_informative nonzero regressors and some adjustable gaussian noise. Along with the features and the target vairable, the regression model coefficients can also be obtained from the output.
+
+We'll split the data into training and testing sets, and also split the ideal predictions, which is a line based on the linear regression model.
+
+
+
+
+-------------data-----------------------
+
+
+
+from sklearn.datasets import make_regression
+
+X, y, ideal_coef = make_regression(n_samples=100, n_features=100, n_informative=10, noise=10, random_state=42, coef=True)
+
+# Get the ideal predictions based on the informative coefficients used in the regression model
+ideal_predictions = X @ ideal_coef
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test, ideal_train, ideal_test = train_test_split(X, y, ideal_predictions, test_size=0.3, random_state=42)
+
+
+
+
+
+
+/////////The line X, y, ideal_coef = make_regression(...) is the core of this section. It calls the make_regression function to create our synthetic data.
+
+n_samples=100: We're creating a small dataset with 100 data points.
+
+n_features=100: Each data point has 100 features, making this a high-dimensional dataset.
+
+n_informative=10: This is the key part for our lab. It tells the function that out of the 100 features, only 10 of them will actually be useful for predicting the target variable. The other 90 features are just noise. This creates a sparse coefficient scenario.
+
+noise=10: We're adding a moderate amount of noise to the target variable to make the problem more realistic and challenging.
+
+random_state=42: This ensures that the dataset we generate is the same every time we run the code, making our experiment reproducible.
+
+coef=True: This tells the function to also return the true, underlying coefficients that were used to generate the data. This ideal_coef variable is our ground truth for which features are important.
+
+
+
+
+//////The line ideal_predictions = X @ ideal_coef calculates what the target variable would look like without any noise.
+
+@ is the matrix multiplication operator in Python.
+
+X @ ideal_coef multiplies our feature matrix X by the ideal_coef vector. This gives us the target values that would be generated if there were no noise.
+
+We're creating these ideal_predictions so we have a perfect, noise-free reference to compare our model's predictions against
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+------------------------ models------------
+
+
+lasso = Lasso(alpha=0.1)
+ridge = Ridge(alpha=1.0)
+linear = LinearRegression()
+
+# Fit the models
+lasso.fit(X_train, y_train)
+ridge.fit(X_train, y_train)
+linear.fit(X_train, y_train)
+
+# Predict on the test set
+y_pred_linear = linear.predict(X_test)
+y_pred_ridge = ridge.predict(X_test)
+y_pred_lasso = lasso.predict(X_test)
+
+
+------------------------- predict and print results------------------
+
+
+regression_results(y_test, y_pred_linear, 'Ordinary')
+regression_results(y_test, y_pred_ridge, 'Ridge')
+regression_results(y_test, y_pred_lasso, 'Lasso')
+
+
+ 
+
+
+-----------------plot prediction vs actual values by all 3 models------------
+
+
+
+fig, axes = plt.subplots(2, 3, figsize=(18, 10), sharey=True)
+
+axes[0,0].scatter(y_test, y_pred_linear, color="red", label="Linear")
+axes[0,0].plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'k--')
+axes[0,0].set_title("Linear Regression")
+axes[0,0].set_xlabel("Actual",)
+axes[0,0].set_ylabel("Predicted",)
+
+axes[0,2].scatter(y_test, y_pred_lasso, color="blue", label="Lasso")
+axes[0,2].plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'k--')
+axes[0,2].set_title("Lasso Regression",)
+axes[0,2].set_xlabel("Actual",)
+
+axes[0,1].scatter(y_test, y_pred_ridge, color="green", label="Ridge")
+axes[0,1].plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'k--')
+axes[0,1].set_title("Ridge Regression",)
+axes[0,1].set_xlabel("Actual",)
+
+axes[0,2].scatter(y_test, y_pred_lasso, color="blue", label="Lasso")
+axes[0,2].plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'k--')
+axes[0,2].set_title("Lasso Regression",)
+axes[0,2].set_xlabel("Actual",)
+
+
+# Line plots for predictions compared to actual and ideal predictions
+axes[1,0].plot(y_test, label="Actual", lw=2)
+axes[1,0].plot(y_pred_linear, '--', lw=2, color='red', label="Linear")
+axes[1,0].set_title("Linear vs Ideal",)
+axes[1,0].legend()
+ 
+axes[1,1].plot(y_test, label="Actual", lw=2)
+# axes[1,1].plot(ideal_test, '--', label="Ideal", lw=2, color="purple")
+axes[1,1].plot(y_pred_ridge, '--', lw=2, color='green', label="Ridge")
+axes[1,1].set_title("Ridge vs Ideal",)
+axes[1,1].legend()
+ 
+axes[1,2].plot(y_test, label="Actual", lw=2)
+axes[1,2].plot(y_pred_lasso, '--', lw=2, color='blue', label="Lasso")
+axes[1,2].set_title("Lasso vs Ideal",)
+axes[1,2].legend()
+ 
+plt.tight_layout()
+plt.show()
+
+
+
+
+
+
+
+
+/////this shows lasso is fit ..
+
+
+
+
+
+-------------- now use lasso to get meaningful features ---------------------------------
+
+//// lasso has to select meaningful features by all 100 features , ideal coeff were taken in start , compare them with coefff of medels that how many are 0 ( non meaning features should have coeff = 0 )
+by residual error
+
+
+use threshhold from residual errors , which is 5 for lesso 
+
+step 1 : -----create df------
+
+to visualize which feature are imp 
+
+threshold = 5 # selected by inspection of residuals plot
+
+# Create a dataframe containing the Lasso model and ideal coefficients
+feature_importance_df = pd.DataFrame({
+    'Lasso Coefficient': lasso_coeff,
+    'Ideal Coefficient': ideal_coef
+})
+
+# Mark the selected features
+feature_importance_df['Feature Selected'] = feature_importance_df['Lasso Coefficient'].abs() > threshold
+
+
+print("Features Identified as Important by Lasso:")
+display(feature_importance_df[feature_importance_df['Feature Selected']])
+
+print("\nNonzero Ideal Coefficient Indices")
+display(feature_importance_df[feature_importance_df['Ideal Coefficient']>0])
+
+
+
+
+step 2 : ---- select those 10 features----
+
+
+Part 2. Use the threshold to select the most important features for use in modelling.
+Also split your data into train, test sets, including the ideal targets. How many features did you end up selecting?
+
+
+
+important_features = feature_importance_df[feature_importance_df['Feature Selected']].index
+
+
+
+# Filter features
+X_filtered = X[:, important_features]
+print("Shape of the filtered feature set:", X_filtered.shape)
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test, ideal_train, ideal_test = train_test_split(X_filtered, y, ideal_predictions, test_size=0.3, random_state=42)
+
+
+
+
+------------------ fit models-------------
+
+# Initialize the models
+lasso = Lasso(alpha=0.1)
+ridge = Ridge(alpha=1.0)
+linear = LinearRegression()
+
+# Fit the models
+lasso.fit(X_train, y_train)
+ridge.fit(X_train, y_train)
+linear.fit(X_train, y_train)
+
+# Predict on the test set
+y_pred_linear = linear.predict(X_test)
+y_pred_ridge = ridge.predict(X_test)
+y_pred_lasso = lasso.predict(X_test)
+
+
+
+--------------- print -----------
+
+regression_results(y_test, y_pred_linear, 'Ordinary')
+regression_results(y_test, y_pred_ridge, 'Ridge')
+regression_results(y_test, y_pred_lasso, 'Lasso')
+
+
+
+
+
