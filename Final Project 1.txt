@@ -1,0 +1,328 @@
+Now that you have a feel for how to optimize your machine learning pipeline, let's practice with a real world dataset.
+
+You'll use cross validation and a hyperparameter grid search to optimize your machine learning pipeline.
+
+You will use the Titanic Survival Dataset to build a classification model to predict whether a passenger survived the sinking of the Titanic, based on attributes of each passenger in the data set.
+
+You'll start with building a Random Forest Classifier, then modify your pipeline to use a Logistic Regression estimator instead. You'll evaluate and compare your results. This lab will help prepare you for completing the Final Project.
+
+
+
+-------------------- imports ------------
+!pip install numpy
+!pip install matplotlib
+!pip install pandas
+!pip install scikit-learn
+!pip install seaborn
+
+
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, StratifiedKFold
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.decomposition import PCA
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import Pipeline
+import seaborn as sns
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+
+
+
+
+---------------------------- data---------------------------
+
+// titanic data is prresent on seaborn community
+
+titanic = sns.load_dataset('titanic')
+titanic.head()
+
+sns loads data as df automatically
+
+
+
+--------------------- pre processing----------------------------------
+
+titanic.isnull().sum()
+
+////deck has a lot of missing values so we'll drop it. age has quite a few missing values as well. Although it could be, embarked and embark_town don't seem relevant so we'll drop them as well. It's unclear what alive refers to so we'll ignore it.
+
+
+features = ['pclass', 'sex', 'age', 'sibsp', 'parch', 'fare', 'class', 'who', 'adult_male', 'alone']
+target = 'survived'
+
+X = titanic[features]
+y = titanic[target]
+
+
+
+/// check imbalance
+
+y.value_counts()
+
+38% survived so data is imbalance so stratify
+
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+
+
+
+//// we want pipeline process so standardization , transformation in ppeline . just detect numerical and category features and create separate pipelines for them
+/// if done before => data leakage , as avg , S.D is calculated 
+
+
+numerical_features = X_train.select_dtypes(include=['number']).columns.tolist()
+categorical_features = X_train.select_dtypes(include=['object', 'category']).columns.tolist()
+
+
+
+/// now separate pipelines
+
+numerical_transformer = Pipeline(steps=[
+
+    ('imputer', SimpleImputer(strategy='median')),
+
+    ('scaler', StandardScaler())
+
+])
+
+// imputer fills null values by median in numerical data
+
+
+
+categorical_transformer = Pipeline(steps=[
+
+    ('imputer', SimpleImputer(strategy='most_frequent')),
+
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))
+
+])
+
+//// imputer fills null values by modein categorical data , use when less missing values to be safe from imbalance.
+
+
+
+// combine these two preprocessing pipeline in 1 single column processor which allows to run different process on diffferent column and create single data matrix to feed model
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numerical_transformer, numerical_features),
+        ('cat', categorical_transformer, categorical_features)
+    ])
+
+
+
+--------------------- model with pipeline------------------------------
+
+pipeline = Pipeline(steps=[
+    ('preprocessor', preprocessor),
+    ('classifier', RandomForestClassifier(random_state=42))
+])
+
+
+// step after pipeline is GRIDCV to get best hyper parameter , make parameter grid first
+
+
+param_grid = {
+    'classifier__n_estimators': [50, 100],  // no of trees
+    'classifier__max_depth': [None, 10, 20], // tree depth none means no specific depth , it is based on number of eaves to be formed , but this is very complex and overfitted , it involves all classes in decision
+    'classifier__min_samples_split': [2, 5]   //This parameter sets the minimum number of data points that must be present in a node for it to be split  , 2 is the default and allows the trees to keep splitting until there are only two data points in a node. This can create a very detailed, complex tree that is more likely to overfit.
+}
+
+
+//then make k folds
+
+cv = StratifiedKFold(n_splits=5, shuffle=True)
+
+
+
+// then fit data in  model
+
+
+model = GridSearchCV(estimator=pipeline, param_grid=param_grid, cv=cv, scoring='accuracy', verbose=2)
+model.fit(X_train, y_train)
+
+
+
+
+
+------------------------ predict ----------------------------------
+
+y_pred = model.predict(X_test)
+print(classification_report(y_test, y_pred))
+
+
+// in imbalance data , accuracy score can be misleading so classification reports tell all about precision , recall , accuracy , TP , NP etc
+
+	
+// also make confusion matrix
+
+conf_matrix = confusion_matrix(y_test, y_pred)
+
+plt.figure()
+sns.heatmap(conf_matrix, annot=True, cmap='Blues', fmt='d')
+
+# Set the title and labels
+plt.title('Titanic Classification Confusion Matrix')
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+
+# Show the plot
+plt.tight_layout()
+plt.show()
+
+
+-------------------------- now use feature importance ------------------------
+
+
+random forest work on both categorical , numerical data , it can now explain importance of features as well as combined importance of two or more features
+
+so use categorical features from one hot encoder ( as they wer converted into new sub columns from one hot oncoder) and numerical features from df ( as standard scaler dont create new columns)
+
+
+
+///model.best_estimator_['preprocessor'].named_transformers_['cat'].named_steps['onehot'].get_feature_names_out(categorical_features)
+
+// access the final best pipe line from grid cv by best_estimator and get names from that k fold of preprocessor -> cat -> onehot -> categorical features
+
+
+feature_importances = model.best_estimator_['classifier'].feature_importances_
+
+
+// model has pipeline and pipeline has 2 features ' classifier ' for forest and 'preprocessor ' for final single column preprocessor 
+//RandomForestClassifier automatically calculates a score for each feature that measures how much that feature contributes to the reduction of impurity (or randomness) in the decision trees. This score is stored in the .feature_importances_ attribute. The result is a simple NumPy array of numbers, where each number corresponds to a feature in the order they were fed into the model.
+
+# Combine the numerical and one-hot encoded categorical feature names
+feature_names = numerical_features + list(model.best_estimator_['preprocessor']
+                                        .named_transformers_['cat']
+                                        .named_steps['onehot']
+                                        .get_feature_names_out(categorical_features))
+
+
+// as in our final single column transformer we used numerical column first so here nueric + categoric
+
+
+now we have features importance by forest itself and column names to use with that feature importance array
+
+
+
+
+
+----------------- plot feature importance------------
+
+importance_df = pd.DataFrame({'Feature': feature_names,
+                              'Importance': feature_importances
+                             }).sort_values(by='Importance', ascending=False)
+
+# Plotting
+plt.figure(figsize=(10, 6))
+plt.barh(importance_df['Feature'], importance_df['Importance'], color='skyblue')
+plt.gca().invert_yaxis() 
+plt.title('Most Important Features in predicting whether a passenger survived')
+plt.xlabel('Importance Score')
+plt.show()
+
+# Print test score 
+test_score = model.score(X_test, y_test)
+print(f"\nTest set accuracy: {test_score:.2%}")
+
+
+
+/////////but this doesnt shows correlation , so we need another approach .
+
+
+
+-------------------- try logistic regression --------------------------------
+
+
+
+# Replace RandomForestClassifier with LogisticRegression
+pipeline.set_params(classifier=LogisticRegression(random_state=42))
+
+# update the model's estimator to use the new pipeline
+model.estimator = pipeline
+
+# Define a new grid with Logistic Regression parameters
+param_grid = {
+   
+    'classifier__solver' : ['liblinear'],
+    'classifier__penalty': ['l1', 'l2'],
+    'classifier__class_weight' : [None, 'balanced']
+}
+
+model.param_grid = param_grid
+
+# Fit the updated pipeline with Logistic Regression
+model.fit(X_train, y_train)
+
+# Make predictions
+y_pred = model.predict(X_test)
+
+
+
+
+
+///The liblinear solver is a good choice for smaller datasets and for handling both L1 and L2 regularization penalties, which are also included in your grid.
+
+
+// also check both l1 , l2  ... and with normal and blanaced techniques
+
+
+
+
+
+-------------------------- pred ------------------
+
+
+print(classification_report(y_test, y_pred))
+
+
+------------ importance features in LR ------------------------
+
+coefficients = model.best_estimator_.named_steps['classifier'].coef_[0]
+
+# Combine numerical and categorical feature names
+numerical_feature_names = numerical_features
+categorical_feature_names = (model.best_estimator_.named_steps['preprocessor']
+                                     .named_transformers_['cat']
+                                     .named_steps['onehot']
+                                     .get_feature_names_out(categorical_features)
+                            )
+feature_names = numerical_feature_names + list(categorical_feature_names)
+
+
+// now importance theta and column names are found , map them
+
+
+
+importance_df = pd.DataFrame({
+    'Feature': feature_names,
+    'Coefficient': coefficients
+}).sort_values(by='Coefficient', ascending=False, key=abs)  # Sort by absolute values
+
+# Plotting
+plt.figure(figsize=(10, 6))
+plt.barh(importance_df['Feature'], importance_df['Coefficient'].abs(), color='skyblue')
+plt.gca().invert_yaxis()
+plt.title('Feature Coefficient magnitudes for Logistic Regression model')
+plt.xlabel('Coefficient Magnitude')
+plt.show()
+
+# Print test score
+test_score = model.best_estimator_.score(X_test, y_test)
+print(f"\nTest set accuracy: {test_score:.2%}")
+
+
+
+
+
+
+
+
